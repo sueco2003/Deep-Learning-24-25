@@ -1,1 +1,1 @@
-# Deep-Leatning-24-25
+# Deep-Learning-24-25
