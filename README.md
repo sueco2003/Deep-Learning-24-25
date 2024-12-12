@@ -15,3 +15,11 @@ hw1-q2.py
 
 utils.py
 - contains additional Python functions to handle dataset loading.
+
+# Conda Environment
+
+To create the environment to run the python3 files do:
+`conda env create -f environment.yml` and then `conda activate DL-24-25`
+To update the environment add the new dependencies in environment.yml and 
+`conda activate DL-24-25`
+`conda env update environment.yml --prune`
