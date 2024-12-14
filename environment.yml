@@ -1,7 +1,0 @@
-name: DL-24-25
-dependencies:
-  - python=3.8
-  - numpy
-  - matplotlib
-  - pip:
-    - torch

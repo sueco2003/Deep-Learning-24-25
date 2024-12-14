@@ -14,39 +14,21 @@ import utils
 
 
 class LogisticRegression(nn.Module):
-
     def __init__(self, n_classes, n_features, **kwargs):
         """
-        n_classes (int)
-        n_features (int)
-
-        The __init__ should be used to declare what kind of layers and other
-        parameters the module has. For example, a logistic regression module
-        has a weight matrix and bias vector. For an idea of how to use
-        pytorch to make weights and biases, have a look at
-        https://pytorch.org/docs/stable/nn.html
+        Initializes weights and bias for logistic regression.
         """
         super().__init__()
-        # In a pytorch module, the declarations of layers needs to come after
-        # the super __init__ line, otherwise the magic doesn't work.
+        self.linear = nn.Linear(n_features, n_classes)  # Linear layer Wx + b
 
     def forward(self, x, **kwargs):
         """
-        x (batch_size x n_features): a batch of training examples
-
-        Every subclass of nn.Module needs to have a forward() method. forward()
-        describes how the module computes the forward pass. In a log-lineear
-        model like this, for example, forward() needs to compute the logits
-        y = Wx + b, and return y (you don't need to worry about taking the
-        softmax of y because nn.CrossEntropyLoss does that for you).
-
-        One nice thing about pytorch is that you only need to define the
-        forward pass -- this is enough for it to figure out how to do the
-        backward pass.
+        Computes the logits y = Wx + b for a batch of inputs.
         """
-        raise NotImplementedError
+        return self.linear(x)
 
 
+# Q2.2
 class FeedforwardNetwork(nn.Module):
     def __init__(
             self, n_classes, n_features, hidden_size, layers,
@@ -63,9 +45,20 @@ class FeedforwardNetwork(nn.Module):
         attributes that each FeedforwardNetwork instance has. Note that nn
         includes modules for several activation functions and dropout as well.
         """
-        super().__init__()
-        # Implement me!
-        raise NotImplementedError
+        if activation_type == "tanh":
+            activation = nn.Tanh()
+        else:
+            activation = nn.ReLU()
+        super(FeedforwardNetwork, self).__init__()
+        self.rede = nn.Sequential()
+        input_size = n_features
+        for i in range(0, layers+1):
+            self.rede.append(nn.Linear(input_size, hidden_size))
+            self.rede.append(activation)
+            self.rede.append(nn.Dropout(p=dropout))
+            input_size = hidden_size
+
+        self.rede.append(nn.Linear(hidden_size, n_classes))
 
     def forward(self, x, **kwargs):
         """
@@ -75,28 +68,23 @@ class FeedforwardNetwork(nn.Module):
         the output logits from x. This will include using various hidden
         layers, pointwise nonlinear functions, and dropout.
         """
-        raise NotImplementedError
+
+        for a in self.rede:
+            x = a(x)
+
+        return x
 
 
 def train_batch(X, y, model, optimizer, criterion, **kwargs):
     """
-    X (n_examples x n_features)
-    y (n_examples): gold labels
-    model: a PyTorch defined model
-    optimizer: optimizer used in gradient step
-    criterion: loss function
-
-    To train a batch, the model needs to predict outputs for X, compute the
-    loss between these predictions and the "gold" labels y using the criterion,
-    and compute the gradient of the loss with respect to the model parameters.
-
-    Check out https://pytorch.org/docs/stable/optim.html for examples of how
-    to use an optimizer object to update the parameters.
-
-    This function should return the loss (tip: call loss.item()) to get the
-    loss as a numerical value that is not part of the computation graph.
+    Trains the model on a batch of data.
     """
-    raise NotImplementedError
+    optimizer.zero_grad()          # Clear previous gradients
+    logits = model(X)              # Forward pass
+    loss = criterion(logits, y)    # Compute loss
+    loss.backward()                # Backward pass (gradient computation)
+    optimizer.step()               # Update parameters
+    return loss.item()             # Return the loss value
 
 
 def predict(model, X):

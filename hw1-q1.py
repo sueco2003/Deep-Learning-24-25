@@ -42,25 +42,18 @@ class LinearModel(object):
 class Perceptron(LinearModel):
     def update_weight(self, x_i, y_i, **kwargs):
         """
-        Updates weights based on the Perceptron rule with learning rate and L2 regularization.
         x_i (n_features): a single training example
         y_i (scalar): the gold label for that example
-        **kwargs: contains 'learning_rate' (float) and 'l2_penalty' (float)
+        other arguments are ignored
         """
-        learning_rate = kwargs.get('learning_rate')  # Default learning rate to 1.0
-        l2_penalty = kwargs.get('l2_penalty')  # Default L2 penalty to 0.0
 
-
-        # Compute scores and predict label
         scores = np.dot(self.W, x_i)
         predicted_label = np.argmax(scores)
 
-        if predicted_label != y_i:  # Update weights only if prediction is incorrect
-            self.W[y_i] += learning_rate * x_i  # Reward correct class
-            self.W[predicted_label] -= learning_rate * x_i  # Penalize incorrect class
-
-        # Apply L2 regularization
-        self.W *= (1 - learning_rate * l2_penalty)
+        if predicted_label != y_i:
+            # Perceptron update.
+            self.W[y_i,:] += x_i
+            self.W[predicted_label,:] -= x_i
 
 
 class LogisticRegression(LinearModel):
@@ -70,18 +63,73 @@ class LogisticRegression(LinearModel):
         y_i: the gold label for that example
         learning_rate (float): keep it at the default value for your plots
         """
-        raise NotImplementedError # Q1.2 (a,b)
+        # Compute scores for all classes
+        scores = np.dot(self.W, x_i)  # (n_classes)
 
+        # Compute softmax probabilities
+        exp_scores = np.exp(scores - np.max(scores))  # Stability adjustment
+        probabilities = exp_scores / np.sum(exp_scores)
+
+        # Compute the gradient for each class
+        for k in range(self.W.shape[0]):
+            gradient = (probabilities[k] - (y_i == k)) * x_i
+            regularization = l2_penalty * self.W[k]  # L2 regularization term
+            self.W[k] -= learning_rate * (gradient + regularization)
 
 class MLP(object):
+    # Q3.2b. This MLP skeleton code allows the MLP to be used in place of the
+    # linear models with no changes to the training loop or evaluation code
+    # in main().
     def __init__(self, n_classes, n_features, hidden_size):
         # Initialize an MLP with a single hidden layer.
-        raise NotImplementedError # Q1.3 (a)
+        self.n_classes = n_classes
+        self.units = [n_features,  hidden_size, n_classes]
+        self.W = [np.random.normal(loc=0.1, scale=0.1, size=(
+            self.units[i+1], self.units[i])) for i in range(0, len(self.units)-1)]
+        self.B = [np.zeros(self.units[i+1])
+                  for i in range(0, len(self.units)-1)]
+
+    def forward(self, x, save_hiddens=True):
+        num_layers = len(self.W)
+        hiddens = []
+        hid = x
+        for i in range(num_layers):
+            z = self.W[i] @ hid + self.B[i]
+            if i != num_layers-1:
+                hid = np.maximum(0, z)
+
+                # Flag to save the values of hidden nodes, not needed at prediction time
+                if save_hiddens:
+                    hiddens.append(hid)
+            else:
+                output = z
+
+        return output, hiddens
+
+    def backward(self, x, y, probs, hiddens, learning_rate):
+        num_layers = len(self.W)
+        grad_z = probs - y
+
+        for i in range(num_layers-1, -1, -1):
+            h = x if i == 0 else hiddens[i-1]
+            grad_h = self.W[i].T @ grad_z
+            self.W[i] -= learning_rate * grad_z[:, None] @ h[:, None].T
+            self.B[i] -= learning_rate * grad_z
+            derivative = np.where(h > 0, h, 0)
+            grad_z = grad_h * derivative
 
     def predict(self, X):
         # Compute the forward pass of the network. At prediction time, there is
-        # no need to save the values of hidden nodes.
-        raise NotImplementedError # Q1.3 (a)
+        # no need to save the values of hidden nodes, whereas this is required
+        # at training time.
+        predicted_labels = []
+        for x in X:
+            # Compute forward pass
+            y, _ = self.forward(x, False)
+            y = np.argmax(y)
+            predicted_labels.append(y)
+        predicted_labels = np.array(predicted_labels)
+        return predicted_labels
 
     def evaluate(self, X, y):
         """
@@ -94,11 +142,28 @@ class MLP(object):
         n_possible = y.shape[0]
         return n_correct / n_possible
 
-    def train_epoch(self, X, y, learning_rate=0.001, **kwargs):
+    def train_epoch(self, X, y, learning_rate=0.001):
         """
         Dont forget to return the loss of the epoch.
         """
-        raise NotImplementedError # Q1.3 (a)
+        n_samples = y.shape[0]
+        loss = 0
+        for x, label in zip(X, y):
+            y_one_hot = np.zeros(self.n_classes)
+            y_one_hot[label] = 1
+            output, hiddens = self.forward(x)
+            probs = softmax(output)
+            loss += -y_one_hot @ np.log(probs)
+            self.backward(x, y_one_hot, probs, hiddens, learning_rate)
+
+        loss /= n_samples
+        return loss
+
+
+def softmax(x):
+    exp = np.exp(x - np.max(x))
+    return exp / np.sum(exp)
+
 
 
 def plot(epochs, train_accs, val_accs, filename=None):
