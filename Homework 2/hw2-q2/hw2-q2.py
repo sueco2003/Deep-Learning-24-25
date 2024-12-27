@@ -50,7 +50,7 @@ class ConvBlock(nn.Module):
 
 
 class CNN(nn.Module):
-    def __init__(self, dropout_prob, maxpool=True, batch_norm=True, conv_bias=True):
+    def __init__(self, dropout_prob, maxpool=True, batch_norm=False, conv_bias=True):
         super(CNN, self).__init__()
         channels = [3, 32, 64, 128]
         fc1_out_dim = 1024
@@ -59,7 +59,6 @@ class CNN(nn.Module):
         self.batch_norm = batch_norm
 
         # Initialize convolutional blocks
-
         self.conv1 = ConvBlock(channels[0], channels[1], 3)
         self.conv2 = ConvBlock(channels[1], channels[2], 3)
         self.conv3 = ConvBlock(channels[2], channels[3], 3)
@@ -72,9 +71,9 @@ class CNN(nn.Module):
         self.dropoutMLP = nn.Dropout(p=0.1)
         self.fc2 = nn.Linear(fc1_out_dim, fc2_out_dim)
         self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(fc2_out_dim, 6)
 
-        # For Q2.2 initalize batch normalization
-        
+       
 
     def forward(self, x):
         x = x.reshape(x.shape[0], 3, 48, -1)
@@ -91,6 +90,7 @@ class CNN(nn.Module):
         x = self.dropoutMLP(x)
         x = self.fc2(x)
         x = self.relu2(x)
+        x = self.fc3(x)
         # For Q2.2 implement global averag pooling
         
 
