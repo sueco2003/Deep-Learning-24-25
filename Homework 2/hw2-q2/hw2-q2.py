@@ -27,30 +27,26 @@ class ConvBlock(nn.Module):
         ):
         super().__init__()
 
-        # Q2.1. Initialize convolution, maxpool, activation and dropout layers 
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
-        self.relu = nn.ReLU()
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.dropout = nn.Dropout(p=0.1)
-
-
+        
         # Q2.2 Initialize batchnorm layer 
         
 
     def forward(self, x):
         # input for convolution is [b, c, w, h]
-        # Implement execution of layers in right orde
+        
+        # Implement execution of layers in right order
         x = self.conv(x)
-        x = self.relu(x)
+        x = F.relu(x)
         x = self.pool(x)
-        x = self.dropout(x)
+        x = F.dropout(x, p=0.1)
 
         return x
 
 
-
 class CNN(nn.Module):
-    def __init__(self, dropout_prob, maxpool=True, batch_norm=False, conv_bias=True):
+    def __init__(self, dropout_prob, maxpool=True, batch_norm=True, conv_bias=True):
         super(CNN, self).__init__()
         channels = [3, 32, 64, 128]
         fc1_out_dim = 1024
@@ -67,30 +63,26 @@ class CNN(nn.Module):
 
         # Initialize layers for the MLP block
         self.fc1 = nn.Linear(channels[3] * 6 * 6, fc1_out_dim)
-        self.relu1 = nn.ReLU()
-        self.dropoutMLP = nn.Dropout(p=0.1)
         self.fc2 = nn.Linear(fc1_out_dim, fc2_out_dim)
-        self.relu2 = nn.ReLU()
         self.fc3 = nn.Linear(fc2_out_dim, 6)
-
-       
+        # Initialize layers for the MLP block
+        # For Q2.2 initalize batch normalization
+        
 
     def forward(self, x):
         x = x.reshape(x.shape[0], 3, 48, -1)
 
-        # Implement execution of convolutional blocks 
         x = self.conv1(x)      
         x = self.conv2(x)
         x = self.conv3(x)
         # Flattent output of the last conv block
         x = self.flatten(x)
         # Implement MLP part
-        x = self.fc1(x)
-        x = self.relu1(x)
-        x = self.dropoutMLP(x)
-        x = self.fc2(x)
-        x = self.relu2(x)
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, p=0.1)
+        x = F.relu(self.fc2(x))
         x = self.fc3(x)
+        
         # For Q2.2 implement global averag pooling
         
 
@@ -197,7 +189,7 @@ def main():
         maxpool=not opt.no_maxpool,
         batch_norm=not opt.no_batch_norm
     ).to(opt.device)
-    print(model)
+
     # get an optimizer
     optims = {"adam": torch.optim.Adam, "sgd": torch.optim.SGD}
 
