@@ -22,70 +22,66 @@ class ConvBlock(nn.Module):
             kernel_size,
             padding=None,
             maxpool=True,
-            batch_norm=True,
+            batch_norm=False,
             dropout=0.0
         ):
         super().__init__()
 
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        
-        # Q2.2 Initialize batchnorm layer 
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=1, padding=padding)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2) if maxpool else nn.Identity()
+        self.droupout = nn.Dropout(p=0.1)
+        self.batch_norm_2d = nn.BatchNorm2d(out_channels) if batch_norm else nn.Identity()
         
 
     def forward(self, x):
         # input for convolution is [b, c, w, h]
-        
-        # Implement execution of layers in right order
         x = self.conv(x)
+        x = self.batch_norm_2d(x)
         x = F.relu(x)
         x = self.pool(x)
-        x = F.dropout(x, p=0.1)
+        x = self.droupout(x)
 
         return x
 
 
 class CNN(nn.Module):
-    def __init__(self, dropout_prob, maxpool=True, batch_norm=True, conv_bias=True):
+    def __init__(self, dropout_prob, maxpool=False, batch_norm=False, conv_bias=True):
         super(CNN, self).__init__()
+        self.batch_norm = batch_norm
         channels = [3, 32, 64, 128]
         fc1_out_dim = 1024
         fc2_out_dim = 512
-        self.maxpool = maxpool
-        self.batch_norm = batch_norm
 
-        # Initialize convolutional blocks
-        self.conv1 = ConvBlock(channels[0], channels[1], 3)
-        self.conv2 = ConvBlock(channels[1], channels[2], 3)
-        self.conv3 = ConvBlock(channels[2], channels[3], 3)
+        self.conv1 = ConvBlock(channels[0], channels[1], 3 , padding=1 , dropout=dropout_prob , maxpool=maxpool , batch_norm=batch_norm)
+        self.conv2 = ConvBlock(channels[1], channels[2], 3 , padding=1 , dropout=dropout_prob, maxpool=maxpool , batch_norm=batch_norm)
+        self.conv3 = ConvBlock(channels[2], channels[3], 3 , padding=1 , dropout=dropout_prob , maxpool=maxpool , batch_norm=batch_norm)
+        
+        self.dropout = nn.Dropout(p=0.1)
 
-        self.flatten = nn.Flatten()
-
-        # Initialize layers for the MLP block
-        self.fc1 = nn.Linear(channels[3] * 6 * 6, fc1_out_dim)
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1)) if batch_norm else nn.Identity()
+       
+        in_features = channels[3] if batch_norm else channels[3] * 6 * 6 
+        self.fc1 = nn.Linear(in_features, fc1_out_dim)
+        self.bn2 = nn.BatchNorm1d(fc1_out_dim) if batch_norm else nn.Identity()
         self.fc2 = nn.Linear(fc1_out_dim, fc2_out_dim)
         self.fc3 = nn.Linear(fc2_out_dim, 6)
-        # Initialize layers for the MLP block
-        # For Q2.2 initalize batch normalization
-        
 
     def forward(self, x):
-        x = x.reshape(x.shape[0], 3, 48, -1)
+        x = x.reshape(x.shape[0], 3, 48, 48)
 
         x = self.conv1(x)      
         x = self.conv2(x)
         x = self.conv3(x)
-        # Flattent output of the last conv block
-        x = self.flatten(x)
+
+        x = x.view(-1,128 * 6 * 6) 
+
         # Implement MLP part
         x = F.relu(self.fc1(x))
-        x = F.dropout(x, p=0.1)
+        x = self.bn2(x)
+        x = self.dropout(x)
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         
-        # For Q2.2 implement global averag pooling
-        
-
         return F.log_softmax(x, dim=1)
  
 
@@ -189,6 +185,7 @@ def main():
         maxpool=not opt.no_maxpool,
         batch_norm=not opt.no_batch_norm
     ).to(opt.device)
+    print(model)
 
     # get an optimizer
     optims = {"adam": torch.optim.Adam, "sgd": torch.optim.SGD}
