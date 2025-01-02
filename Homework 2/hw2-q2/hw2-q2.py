@@ -28,8 +28,11 @@ class ConvBlock(nn.Module):
         super().__init__()
 
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=1, padding=padding)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2) if maxpool else nn.Identity()
+        
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        
         self.droupout = nn.Dropout(p=0.1)
+        
         self.batch_norm_2d = nn.BatchNorm2d(out_channels) if batch_norm else nn.Identity()
         
 
@@ -37,15 +40,14 @@ class ConvBlock(nn.Module):
         # input for convolution is [b, c, w, h]
         x = self.conv(x)
         x = self.batch_norm_2d(x)
-        x = F.relu(x)
-        x = self.pool(x)
+        x = self.pool(F.relu(x))
         x = self.droupout(x)
 
         return x
 
 
 class CNN(nn.Module):
-    def __init__(self, dropout_prob, maxpool=False, batch_norm=False, conv_bias=True):
+    def __init__(self, dropout_prob, maxpool=True, batch_norm=False, conv_bias=True):
         super(CNN, self).__init__()
         self.batch_norm = batch_norm
         channels = [3, 32, 64, 128]
@@ -56,13 +58,15 @@ class CNN(nn.Module):
         self.conv2 = ConvBlock(channels[1], channels[2], 3 , padding=1 , dropout=dropout_prob, maxpool=maxpool , batch_norm=batch_norm)
         self.conv3 = ConvBlock(channels[2], channels[3], 3 , padding=1 , dropout=dropout_prob , maxpool=maxpool , batch_norm=batch_norm)
         
-        self.dropout = nn.Dropout(p=0.1)
-
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1)) if batch_norm else nn.Identity()
        
         in_features = channels[3] if batch_norm else channels[3] * 6 * 6 
-        self.fc1 = nn.Linear(in_features, fc1_out_dim)
+       
         self.bn2 = nn.BatchNorm1d(fc1_out_dim) if batch_norm else nn.Identity()
+       
+        self.dropout = nn.Dropout(p=0.1)
+       
+        self.fc1 = nn.Linear(in_features , fc1_out_dim)
         self.fc2 = nn.Linear(fc1_out_dim, fc2_out_dim)
         self.fc3 = nn.Linear(fc2_out_dim, 6)
 
@@ -72,10 +76,10 @@ class CNN(nn.Module):
         x = self.conv1(x)      
         x = self.conv2(x)
         x = self.conv3(x)
+       
+        x = self.global_avg_pool(x)
+        x = torch.flatten(x, 1)
 
-        x = x.view(-1,128 * 6 * 6) 
-
-        # Implement MLP part
         x = F.relu(self.fc1(x))
         x = self.bn2(x)
         x = self.dropout(x)
@@ -136,7 +140,7 @@ def plot(epochs, plottable, ylabel='', name=''):
 
 
 def get_number_trainable_params(model):
-    raise NotImplementedError
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
 def plot_file_name_sufix(opt, exlude):
@@ -164,7 +168,7 @@ def main():
     parser.add_argument('-no_maxpool', action='store_true')
     parser.add_argument('-no_batch_norm', action='store_true')
     parser.add_argument('-data_path', type=str, default='intel_landscapes.v2.npz',)
-    parser.add_argument('-device', choices=['cpu', 'cuda', 'mps'], default='cpu')
+    parser.add_argument('-device', choices=['cpu', 'cuda', 'mps'], default='cuda')
 
     opt = parser.parse_args()
 
