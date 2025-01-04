@@ -20,8 +20,11 @@ class BahdanauAttention(nn.Module):
 
     def __init__(self, hidden_size):
         super(BahdanauAttention, self).__init__()
+        # Using linear transformations for energy computation
+        self.linear_h = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.linear_s = nn.Linear(hidden_size, hidden_size, bias=False)
+        self.v = nn.Linear(hidden_size, 1, bias=False)
         
-        raise NotImplementedError("Add your implementation.")
 
     def forward(self, query, encoder_outputs, src_lengths):
         """
@@ -32,7 +35,27 @@ class BahdanauAttention(nn.Module):
             attn_out:   (batch_size, max_tgt_len, hidden_size) - attended vector
         """
 
-        raise NotImplementedError("Add your implementation.")
+        # Expand the query for compatibility
+        query_expanded = query.unsqueeze(2)
+        
+        # Compute energy scores
+        W_h = self.linear_h(encoder_outputs) 
+        W_s = self.linear_s(query_expanded)
+        energy = self.v(torch.tanh(W_h.unsqueeze(1) + W_s)).squeeze(-1)
+        
+        # Create a mask for padding tokens
+        src_seq_mask = ~self.sequence_mask(src_lengths).unsqueeze(1) 
+        energy.masked_fill_(src_seq_mask, -float('inf'))
+        
+        # Attention weights
+        attention_weights = torch.softmax(energy, dim=-1)
+        
+        # Context vector
+        context = torch.bmm(attention_weights, encoder_outputs) 
+        
+        # Combine context with query
+        attn_out = torch.tanh(context + query) 
+        return attn_out
 
     def sequence_mask(self, lengths):
         """
@@ -89,13 +112,41 @@ class Encoder(nn.Module):
         #############################################
         
 
+        emb = self.embedding(src)
+        emb = self.dropout(emb)
+        temp_padded = pack(emb, lengths, batch_first = True, enforce_sorted = False)
+        output, hidden_n = self.lstm(temp_padded)
+        output, _ = unpack(output, batch_first=True)
+        hidden_n = self._reshape_hidden(hidden_n)
+        output = self.dropout(output)
+        return output, hidden_n
+
         #############################################
         # END OF YOUR CODE
         #############################################
         # enc_output: (batch_size, max_src_len, hidden_size)
         # final_hidden: tuple with 2 tensors
         # each tensor is (num_layers * num_directions, batch_size, hidden_size)
-        raise NotImplementedError("Add your implementation.")
+
+    def _merge_tensor(self, state_tensor):
+        
+        forward_states = state_tensor[::2]
+        backward_states = state_tensor[1::2]
+        return torch.cat([forward_states, backward_states], 2)
+
+    def _reshape_hidden(self, hidden):
+        """
+        hidden:
+            num_layers * num_directions x batch x self.hidden_size // 2
+            or a tuple of these
+        returns:
+            num_layers
+        """
+        assert self.lstm.bidirectional
+        if isinstance(hidden, tuple):
+            return tuple(self._merge_tensor(h) for h in hidden)
+        else:
+            return self._merge_tensor(hidden)
 
 
 class Decoder(nn.Module):
@@ -158,15 +209,33 @@ class Decoder(nn.Module):
         #         src_lengths,
         #     )
         #############################################
-        
 
+        emb = self.embedding(tgt)  # (batch_size, max_tgt_len, hidden_size)
+        emb = self.dropout(emb)
+
+        # LSTM pass
+        output, dec_state = self.lstm(emb, dec_state)  # (batch_size, max_tgt_len, hidden_size)
+
+        # Dropout after LSTM
+        output = self.dropout(output)
+
+        # If training, truncate the last timestep
+        if self.training:
+            output = output[:, :-1, :]
+
+        # Apply attention if available
+        if self.attn is not None:
+            # Attention modifies the LSTM output using encoder outputs and source lengths
+            output = self.attn(output, encoder_outputs, src_lengths)
+
+        return output, dec_state
+    
         #############################################
         # END OF YOUR CODE
         #############################################
         # outputs: (batch_size, max_tgt_len, hidden_size)
         # dec_state: tuple with 2 tensors
         # each tensor is (num_layers, batch_size, hidden_size)
-        raise NotImplementedError("Add your implementation.")
 
 
 class Seq2Seq(nn.Module):

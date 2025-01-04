@@ -231,7 +231,24 @@ def nucleus_sampling(logits, p=0.8):
     # 3. Rescale the distribution and sample from the resulting set of tokens.
     # Implementation of the steps as described above:
 
-    raise NotImplementedError("Add your implementation.")
+    # Convert logits to probabilities
+    probabilities = torch.softmax(logits, dim=-1)
+    # Sort probabilities in descending order and get the indices
+    sorted_probs, sorted_indices = torch.sort(probabilities, descending=True)
+    # Compute cumulative probabilities
+    cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+    # Identify the cutoff point where cumulative probability exceeds p
+    cutoff_idx = torch.searchsorted(cumulative_probs, p)
+    # Keep only tokens up to the cutoff index
+    valid_probs = sorted_probs[:cutoff_idx + 1]
+    valid_indices = sorted_indices[:cutoff_idx + 1]
+    # Rescale probabilities to sum to 1 and sample
+    valid_probs = valid_probs / valid_probs.sum()  # Normalize probabilities
+    next_token_idx = torch.multinomial(valid_probs, num_samples=1)  # Sample one token
+    # Map the sampled index back to the original token index
+    next_token = valid_indices[next_token_idx]
+    return next_token
+
 
 
 def main(args):
@@ -322,7 +339,6 @@ def main(args):
         print("Testing...")
 
         model.load_state_dict(torch.load(checkpoint_name, weights_only=True))
-
         test_cer, test_wer = test(model, test_iter, p=args.topp)
         print("Test CER: %.4f, Test WER: %.4f" % (test_cer, test_wer))
 
